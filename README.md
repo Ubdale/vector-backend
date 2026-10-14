@@ -30,3 +30,5 @@ pip install -r requirements-dev.txt
 python -m unittest test_tracer test_api
 
 Tests cover fitted circles, tiny accents, thin lines, holes, transparency, background removal, API payloads, CORS, and capacity limits.
+
+The default CORS list includes https://vector-gamma-one.vercel.app. If ALLOWED_ORIGINS is set in Render, that value overrides the defaults and must include this exact origin.

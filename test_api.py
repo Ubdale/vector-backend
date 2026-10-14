@@ -12,6 +12,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(result.status_code,200); self.assertIn('<path',result.json()['svg'])
         self.assertEqual(self.client.post('/api/trace',content=b'x',headers=headers).status_code,400)
     def test_cors(self):
+        production=self.client.options('/api/trace',headers={'Origin':'https://vector-gamma-one.vercel.app','Access-Control-Request-Method':'POST'})
+        self.assertEqual(production.status_code,200)
+        self.assertEqual(production.headers['access-control-allow-origin'],'https://vector-gamma-one.vercel.app')
         result=self.client.options('/api/trace',headers={'Origin':'http://localhost:3000','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'X-Width,X-Height,X-Settings,Content-Type'})
         self.assertEqual(result.status_code,200)
         self.assertEqual(result.headers['access-control-allow-origin'],'http://localhost:3000')

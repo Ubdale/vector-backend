@@ -5,7 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from tracer import trace
 
 app=FastAPI(title='Outline Vector Backend')
-origins=[origin.strip() for origin in os.getenv('ALLOWED_ORIGINS','http://localhost:3000,http://127.0.0.1:3000').split(',') if origin.strip()]
+origins=[origin.strip() for origin in os.getenv('ALLOWED_ORIGINS','https://vector-gamma-one.vercel.app,http://localhost:3000,http://127.0.0.1:3000').split(',') if origin.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=origins,allow_methods=['GET','POST'],allow_headers=['Content-Type','X-Width','X-Height','X-Settings'])
 capacity=threading.BoundedSemaphore(1)
 
