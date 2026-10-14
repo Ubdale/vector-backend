@@ -1,0 +1,5 @@
+numpy>=1.26,<3
+Pillow>=10,<13
+opencv-python-headless>=4.10,<6
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
