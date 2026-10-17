@@ -27,5 +27,10 @@ class ApiTests(unittest.TestCase):
             result=self.client.post('/api/trace',content=bytes(400),headers={'X-Width':'10','X-Height':'10'})
             self.assertEqual(result.status_code,503)
         finally: capacity.release()
+    def test_malformed_settings_rejected_before_tracing(self):
+        for settings in [{'preset':[]},{'edgeStyle':3},{'denoise':'false'},{'autoColors':1},{'smooth':True},{'rounding':float('inf')},{'colors':10**1000}]:
+            with self.subTest(settings=settings):
+                result=self.client.post('/api/trace',content=bytes(400),headers={'X-Width':'10','X-Height':'10','X-Settings':json.dumps(settings)})
+                self.assertEqual(result.status_code,400)
 
 if __name__=='__main__': unittest.main()

@@ -7,8 +7,26 @@ import cv2
 import numpy as np
 from PIL import Image
 import vtracer
+from gradient_fit import fit_visible_colors,rectangle_gradient
 
 ENGINE = 'python-vtracer-hybrid'
+
+def protected_accents(raw,width,height):
+    """Keep exceptional 1px accents with bounded temporary memory."""
+    if min(width,height)<3: return ''
+    source=np.frombuffer(raw,dtype=np.uint8).reshape(height,width,4)[:,:,:3]
+    additions=[]
+    for top in range(1,height-1,128):
+        bottom=min(top+128,height-1)
+        block=source[top-1:bottom+1].astype(np.float32)
+        average=(cv2.boxFilter(block,-1,(3,3),normalize=False)-block)/8
+        variance=np.maximum(0,(cv2.boxFilter(block*block,-1,(3,3),normalize=False)-block*block)/8-average*average)
+        accents=(np.max(np.abs(block-average),axis=2)>70)&(np.max(variance,axis=2)<64)
+        accents=accents[1:-1]; accents[:,[0,-1]]=False
+        ys,xs=np.nonzero(accents)
+        for y,x in zip(ys+top,xs):
+            r,g,b=map(int,source[y,x]); additions.append(f'<path data-accent="true" fill="rgb({r},{g},{b})" opacity="1" d="M {x} {y} L {x+1} {y} L {x+1} {y+1} L {x} {y+1} Z"/>')
+    return ''.join(additions)
 
 def normalize_svg(svg, width, height):
     """Flatten VTracer translations into the app's absolute SVG path contract."""
@@ -41,6 +59,9 @@ def trace(raw,width,height,settings):
     # strokes. Native spline fitting is reserved for noisy, opaque artwork;
     # applying splines to thin line art can balloon narrow regions.
     opaque=image.getchannel('A').getextrema()==(255,255)
+    if opaque and settings.get('autoColors',True) and settings.get('edgeStyle')=='smooth' and settings.get('preset')!='sketch' and not settings.get('background') and settings.get('gradients',True):
+        gradient=rectangle_gradient(image)
+        if gradient is not None: return gradient
     complex_image=image.getcolors(maxcolors=256) is None
     # Flat diagrams may contain hundreds of antialias colors while almost all
     # pixels still belong to a few exact fills. Protect those diagrams too:
@@ -49,7 +70,7 @@ def trace(raw,width,height,settings):
     histogram=sample.getcolors(maxcolors=sample.width*sample.height)
     flat_coverage=sum(sorted((entry[0] for entry in histogram),reverse=True)[:16])/(sample.width*sample.height)
     line_art=flat_coverage>=.9
-    native=opaque and complex_image and not line_art and settings.get('edgeStyle')=='smooth' and not settings.get('corners') and settings.get('preset')!='sketch' and not settings.get('background')
+    native=min(width,height)>=8 and opaque and complex_image and not line_art and settings.get('edgeStyle')=='smooth' and not settings.get('corners') and settings.get('preset')!='sketch' and not settings.get('background')
     if not native:
         if line_art and complex_image:
             # Dense labels and connectors need their source boundaries more
@@ -73,7 +94,15 @@ def trace(raw,width,height,settings):
     softness=max(.2,min(2,float(settings.get('rounding',.75))))
     smoothing=max(0,min(2,float(settings.get('smooth',1))))
     svg=vtracer.convert_raw_image_to_svg(buffer.getvalue(),img_format='png',colormode='color',hierarchical='stacked',mode='spline',filter_speckle=speckle,color_precision=7,layer_difference=8 if illustration else 12,corner_threshold=round(90+20*(softness-.75)),length_threshold=3.5+.5*smoothing,max_iterations=10,splice_threshold=round(60+10*(softness-.75)),path_precision=3)
-    return normalize_svg(svg,width,height)
+    normalized=normalize_svg(svg,width,height)
+    if illustration and settings.get('autoColors',True):
+        normalized=fit_visible_colors(normalized,Image.frombytes('RGBA',(width,height),raw),settings.get('gradients',True))
+    # Native speckle removal may remove a deliberate one-pixel highlight. Keep
+    # only extreme outliers whose eight neighbors form a nearly flat field;
+    # JPEG grain, textured photos and antialiased edges fail this flatness gate.
+    additions=protected_accents(raw,width,height)
+    if additions: normalized=normalized.replace('</svg>',additions+'</svg>')
+    return normalized
 
 def number(v):
     return f'{v:.3f}'.rstrip('0').rstrip('.') or '0'

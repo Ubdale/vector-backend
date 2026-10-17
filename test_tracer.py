@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 from PIL import Image,ImageDraw
 from tracer import trace,normalize_svg
+from gradient_fit import rectangle_gradient,fit_visible_colors
 
 class TracerTests(unittest.TestCase):
     def test_circle_is_fitted_curve(self):
@@ -59,5 +60,48 @@ class TracerTests(unittest.TestCase):
         self.assertNotIn(' C ',svg)
         self.assertNotIn(' Q ',svg)
         self.assertIn('fill="rgb(0,0,0)"',svg)
+    def test_full_frame_true_linear_gradient_is_one_vector_path(self):
+        x=np.arange(256,dtype=np.uint8)
+        pixels=np.empty((48,256,4),dtype=np.uint8)
+        pixels[:,:,0]=x; pixels[:,:,1]=80; pixels[:,:,2]=255-x; pixels[:,:,3]=255
+        svg=trace(pixels.tobytes(),256,48,{'edgeStyle':'smooth','preset':'illustration'})
+        self.assertEqual(svg.count('<linearGradient'),1)
+        self.assertEqual(svg.count('<path'),1)
+        self.assertIn('data-engine="analytic-gradient"',svg)
+        self.assertNotIn('<image',svg)
+    def test_single_pixel_accent_rejects_global_gradient(self):
+        x=np.arange(256,dtype=np.uint8)
+        pixels=np.empty((48,256,4),dtype=np.uint8)
+        pixels[:,:,0]=x; pixels[:,:,1]=80; pixels[:,:,2]=255-x; pixels[:,:,3]=255
+        pixels[17,37,:3]=0
+        self.assertIsNone(rectangle_gradient(Image.fromarray(pixels)))
+    def test_alpha_ramp_never_becomes_opaque_global_gradient(self):
+        pixels=np.full((16,256,4),100,dtype=np.uint8)
+        pixels[:,:,3]=np.arange(256,dtype=np.uint8)
+        svg=trace(pixels.tobytes(),256,16,{'edgeStyle':'smooth','preset':'illustration'})
+        self.assertNotIn('linearGradient',svg)
+        self.assertIn('data-engine="opencv"',svg)
+    def test_gradient_fitting_ignores_hidden_foreground_colors(self):
+        source=Image.new('RGBA',(64,64),'red')
+        ImageDraw.Draw(source).rectangle((16,16,47,47),fill='blue')
+        svg='<svg xmlns="http://www.w3.org/2000/svg"><path fill="rgb(240,0,0)" d="M 0 0 L 64 0 L 64 64 L 0 64 Z"/><path fill="rgb(0,0,240)" d="M 16 16 L 48 16 L 48 48 L 16 48 Z"/></svg>'
+        output=fit_visible_colors(svg,source)
+        self.assertIn('fill="rgb(255,0,0)"',output)
+        self.assertIn('fill="rgb(0,0,255)"',output)
+        self.assertNotIn('linearGradient',output)
+    def test_native_preserves_isolated_one_pixel_highlight(self):
+        y,x=np.mgrid[:96,:128]
+        pixels=np.stack((x*2,y*2,(x+y)%256,np.full_like(x,255)),axis=2).astype(np.uint8)
+        pixels[40:60,40:60,:3]=[30,80,120]
+        pixels[50,50,:3]=[255,255,255]
+        svg=trace(pixels.tobytes(),128,96,{'preset':'illustration','edgeStyle':'smooth'})
+        self.assertIn('data-engine="vtracer-rust"',svg)
+        self.assertIn('data-accent="true" fill="rgb(255,255,255)"',svg)
+        self.assertIn('M 50 50 L 51 50 L 51 51 L 50 51 Z',svg)
+    def test_narrow_noise_uses_precision_fallback(self):
+        random=np.random.default_rng(73)
+        pixels=random.integers(0,256,(1,512,4),dtype=np.uint8); pixels[:,:,3]=255
+        svg=trace(pixels.tobytes(),512,1,{'preset':'illustration','edgeStyle':'smooth'})
+        self.assertIn('data-engine="opencv"',svg)
 
 if __name__=='__main__': unittest.main()
