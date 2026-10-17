@@ -16,6 +16,8 @@ For macOS/Linux, use .venv/bin/python. ALLOWED_ORIGINS defaults to http://localh
 
 ## Render
 
+The repository `.python-version` pins Python 3.12.10 for manually created Render services as well as Blueprint deployments. Keep any Render `PYTHON_VERSION` environment override at the same version. The native tracing deployment must be smoke-tested with a complex image after changing Python versions; startup health alone does not exercise the native extension.
+
 Create a Python Web Service from Ubdale/vector-backend, repository root directory. Build: pip install -r requirements.txt. Start: uvicorn main:app --host 0.0.0.0 --port $PORT. Health check: /health. The included render.yaml supports Blueprint setup. Set ALLOWED_ORIGINS to the exact Vercel frontend URL, for example https://your-frontend.vercel.app; add custom domains as comma-separated origins with no paths or trailing slashes. Do not use a wildcard. Set NEXT_PUBLIC_API_BASE_URL in the frontend to this service's base URL and rebuild it.
 
 ## API
