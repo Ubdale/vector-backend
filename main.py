@@ -2,7 +2,7 @@ import os,json,threading
 from fastapi import FastAPI,Request,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
-from tracer import trace
+from tracer import trace, ENGINE
 
 app=FastAPI(title='Outline Vector Backend')
 origins=[origin.strip() for origin in os.getenv('ALLOWED_ORIGINS','https://vector-gamma-one.vercel.app,http://localhost:3000,http://127.0.0.1:3000').split(',') if origin.strip()]
@@ -10,7 +10,7 @@ app.add_middleware(CORSMiddleware,allow_origins=origins,allow_methods=['GET','PO
 capacity=threading.BoundedSemaphore(1)
 
 @app.get('/health')
-def health(): return {'status':'ok','engine':'python-opencv'}
+def health(): return {'status':'ok','engine':ENGINE,'native_version':'0.6.15','fallback':'opencv-alpha-and-detail'}
 
 @app.post('/api/trace')
 async def vectorize(request:Request):
@@ -32,5 +32,5 @@ async def vectorize(request:Request):
             if len(raw)>expected: raise HTTPException(413,'Image payload is too large')
         if len(raw)!=expected: raise HTTPException(400,'Incomplete RGBA image')
         svg=await run_in_threadpool(trace,bytes(raw),width,height,settings)
-        return {'svg':svg,'engine':'python-opencv'}
+        return {'svg':svg,'engine':ENGINE,'route':'vtracer-rust' if 'data-engine="vtracer-rust"' in svg[:250] else 'opencv'}
     finally: capacity.release()

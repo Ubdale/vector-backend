@@ -1,8 +1,79 @@
 """RGBA palette tracing with subpixel, tangent-continuous quadratic curves."""
 import math
+import io
+import re
+import xml.etree.ElementTree as ET
 import cv2
 import numpy as np
 from PIL import Image
+import vtracer
+
+ENGINE = 'python-vtracer-hybrid'
+
+def normalize_svg(svg, width, height):
+    """Flatten VTracer translations into the app's absolute SVG path contract."""
+    paths=[]
+    for element in ET.fromstring(svg).iter('{http://www.w3.org/2000/svg}path'):
+        translation=re.fullmatch(r'translate\(([-\d.eE+]+)[, ]+([-\d.eE+]+)\)',element.get('transform','translate(0,0)'))
+        if not translation: raise ValueError('Unexpected VTracer transformation')
+        tx,ty=map(float,translation.groups())
+        tokens=re.findall(r'[A-Za-z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?',element.get('d',''))
+        output=[]; i=0
+        while i<len(tokens):
+            command=tokens[i]; i+=1
+            if command=='Z': output.append('Z'); continue
+            count={'M':2,'L':2,'Q':4,'C':6}.get(command)
+            if count is None: raise ValueError('Unexpected VTracer path command')
+            # Explicit commands on every segment keep all exporters compatible.
+            while i<len(tokens) and not tokens[i].isalpha():
+                values=list(map(float,tokens[i:i+count])); i+=count
+                if len(values)!=count: raise ValueError('Incomplete VTracer path')
+                output.append(command+' '+' '.join(number(value+(tx if index%2==0 else ty)) for index,value in enumerate(values)))
+                if command=='M': command='L'
+        color=element.get('fill','#000000').lstrip('#')
+        r,g,b=(int(color[index:index+2],16) for index in (0,2,4))
+        paths.append(f'<path fill="rgb({r},{g},{b})" opacity="1" fill-rule="nonzero" d="{" ".join(output)}"/>')
+    return f'<svg xmlns="http://www.w3.org/2000/svg" data-engine="vtracer-rust" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{"".join(paths)}</svg>'
+
+def trace(raw,width,height,settings):
+    image=Image.frombytes('RGBA',(width,height),raw)
+    # The legacy path retains per-region alpha, exact tiny accents and one-pixel
+    # strokes. Native spline fitting is reserved for noisy, opaque artwork;
+    # applying splines to thin line art can balloon narrow regions.
+    opaque=image.getchannel('A').getextrema()==(255,255)
+    complex_image=image.getcolors(maxcolors=256) is None
+    # Flat diagrams may contain hundreds of antialias colors while almost all
+    # pixels still belong to a few exact fills. Protect those diagrams too:
+    # aggressive region merging otherwise removes their small text/connectors.
+    sample=image.convert('RGB'); sample.thumbnail((512,512),Image.Resampling.NEAREST)
+    histogram=sample.getcolors(maxcolors=sample.width*sample.height)
+    flat_coverage=sum(sorted((entry[0] for entry in histogram),reverse=True)[:16])/(sample.width*sample.height)
+    line_art=flat_coverage>=.9
+    native=opaque and complex_image and not line_art and settings.get('edgeStyle')=='smooth' and not settings.get('corners') and settings.get('preset')!='sketch' and not settings.get('background')
+    if not native:
+        if line_art and complex_image:
+            # Dense labels and connectors need their source boundaries more
+            # than rounded corners; skip bilateral/island cleanup entirely.
+            settings={**settings,'edgeStyle':'faithful','corners':True,'denoise':False}
+        return trace_opencv(raw,width,height,settings).replace('<svg ','<svg data-engine="opencv" ',1)
+    pixels=np.asarray(image)[:,:,:3].copy()
+    if settings.get('denoise') or settings.get('preset')=='illustration':
+        # Edge-preserving JPEG cleanup before region formation prevents the old
+        # palette-island explosion. No blur is applied to transparent/line art.
+        pixels=cv2.bilateralFilter(pixels,7,24,3)
+        pixels=cv2.bilateralFilter(pixels,7,24,3)
+    image=Image.fromarray(pixels)
+    if not settings.get('autoColors',True):
+        count=max(2,min(64,int(settings.get('colors',8))))
+        image=image.quantize(colors=count,method=Image.Quantize.MEDIANCUT,dither=Image.Dither.NONE).convert('RGB')
+    buffer=io.BytesIO(); image.save(buffer,format='PNG')
+    illustration=settings.get('preset')=='illustration'
+    speckle=max(1,round(float(settings.get('detail',0))))
+    if illustration: speckle=max(speckle,4)
+    softness=max(.2,min(2,float(settings.get('rounding',.75))))
+    smoothing=max(0,min(2,float(settings.get('smooth',1))))
+    svg=vtracer.convert_raw_image_to_svg(buffer.getvalue(),img_format='png',colormode='color',hierarchical='stacked',mode='spline',filter_speckle=speckle,color_precision=7,layer_difference=8 if illustration else 12,corner_threshold=round(90+20*(softness-.75)),length_threshold=3.5+.5*smoothing,max_iterations=10,splice_threshold=round(60+10*(softness-.75)),path_precision=3)
+    return normalize_svg(svg,width,height)
 
 def number(v):
     return f'{v:.3f}'.rstrip('0').rstrip('.') or '0'
@@ -54,7 +125,7 @@ def contour_path(contour, smooth, softness, precision=1):
         d+=' Q '+pair(p)+' '+pair(exits[i])
     return d+' L '+pair(entries[0])+' Z'
 
-def trace(raw,width,height,settings):
+def trace_opencv(raw,width,height,settings):
     pixels=np.frombuffer(raw,dtype=np.uint8).reshape(height,width,4).copy()
     pixels[pixels[:,:,3]==0,:3]=0
     if settings.get('background'): pixels[np.all(pixels[:,:,:3]>240,axis=2),3]=0

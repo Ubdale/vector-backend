@@ -3,3 +3,4 @@ Pillow>=10,<13
 opencv-python-headless>=4.10,<6
 fastapi>=0.115,<1
 uvicorn>=0.30,<1
+vtracer==0.6.15
