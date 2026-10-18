@@ -9,7 +9,7 @@ from PIL import Image
 import vtracer
 from gradient_fit import fit_visible_colors,rectangle_gradient
 
-ENGINE = 'python-vtracer-hybrid'
+from engine import ENGINE
 
 def protected_accents(raw,width,height):
     """Keep exceptional 1px accents with bounded temporary memory."""

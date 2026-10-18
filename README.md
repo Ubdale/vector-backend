@@ -22,6 +22,8 @@ Create a Python Web Service from Ubdale/vector-backend, repository root director
 
 ## API
 
+Conversions now run in a disposable spawned process, separate from the lightweight API worker. Uploads have a 30-second limit; conversion jobs have a 90-second limit. Timeout or native-process failure terminates the child and releases the single-job slot, so a stuck conversion cannot leave every subsequent image busy indefinitely. The API returns 408 for upload timeout, 504 for conversion timeout, and 503 for a failed conversion worker. Images and vector results stay in memory; no image files are saved. `/health` reports `execution: isolated-process-v1`; startup health alone is not a tracing-quality check. Per-job process startup adds latency.
+
 GET /health returns service status and capability version `gradient_mode: conservative-linear-v1`. POST /api/trace accepts application/octet-stream RGBA pixels with X-Width, X-Height, and JSON X-Settings headers. Supports dimensions up to 2000x2000; the payload must be exactly width*height*4 bytes. Returns JSON {svg, engine, route}; engine names the hybrid pipeline, while route is vtracer-rust, opencv, or analytic-gradient for the actual image. Invalid input returns 400; concurrent requests return 503. Only one conversion runs at a time to limit memory pressure. Images are processed in memory, not saved. CORS is restricted to configured origins (CORS is not authentication).
 
 Settings: preset (logo/illustration/sketch), colors (2-64 requested), autoColors, edgeStyle (smooth/faithful), rounding, smooth, detail, corners, denoise, background, threshold, gradients (optional boolean, defaults true). Enum and boolean types, finite numeric bounds, and numeric overflow are validated before tracing.
@@ -46,6 +48,8 @@ This is not universal gradient reconstruction: coherent local ramps are supporte
 
 pip install -r requirements-dev.txt
 python -m unittest test_tracer test_api
+
+Run `python -m unittest test_tracer test_api test_trace_worker` for the full suite, including intentional child-process crash, bounded timeout, next-job recovery, API failure responses, CORS, and capacity release.
 
 Tests cover fitted circles, tiny accents, thin lines, holes, transparency, background removal, API payloads, CORS, and capacity limits.
 
