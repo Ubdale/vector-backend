@@ -8,6 +8,30 @@ from tracer import trace,normalize_svg
 from gradient_fit import rectangle_gradient,fit_visible_colors
 
 class TracerTests(unittest.TestCase):
+    def test_multicolor_texture_does_not_collapse_to_grey(self):
+        # Several changing color directions cannot be represented by a single
+        # solid fill or two-stop ramp. Regression for native region collapse.
+        y,x=np.mgrid[:96,:128]
+        rng=np.random.default_rng(41)
+        channels=[125+75*np.sin(x/17+y/23),125+75*np.sin(x/29-y/13),125+75*np.cos(x/19+y/31)]
+        pixels=np.dstack(channels).astype(float)+rng.normal(0,3,(96,128,3))
+        pixels=np.dstack((np.clip(pixels,0,255).astype(np.uint8),np.full((96,128),255,dtype=np.uint8)))
+        source=Image.fromarray(pixels)
+        svg=trace(pixels.tobytes(),128,96,{'preset':'illustration','edgeStyle':'smooth','autoColors':True})
+        from gradient_fit import visible_color_error
+        self.assertLess(visible_color_error(svg,source),12)
+        self.assertNotIn('<image',svg)
+
+    def test_color_error_accounts_for_occlusion_and_linear_gradient(self):
+        from gradient_fit import visible_color_error
+        pixels=np.empty((32,256,4),dtype=np.uint8)
+        pixels[:,:,0]=np.arange(256,dtype=np.uint8);pixels[:,:,1]=80;pixels[:,:,2]=255-np.arange(256,dtype=np.uint8);pixels[:,:,3]=255
+        source=Image.fromarray(pixels)
+        self.assertLess(visible_color_error(rectangle_gradient(source),source),1)
+        source=Image.new('RGB',(64,64),'blue')
+        svg='<svg xmlns="http://www.w3.org/2000/svg"><path fill="rgb(255,0,0)" d="M 0 0 L 64 0 L 64 64 L 0 64 Z"/><path fill="rgb(0,0,255)" d="M 0 0 L 64 0 L 64 64 L 0 64 Z"/></svg>'
+        self.assertEqual(visible_color_error(svg,source),0)
+
     def test_circle_is_fitted_curve(self):
         image=Image.new('RGBA',(128,128)); ImageDraw.Draw(image).ellipse((16,16,111,111),fill=(30,120,60,255))
         svg=trace(image.tobytes(),128,128,{'edgeStyle':'smooth'})

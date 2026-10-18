@@ -143,3 +143,45 @@ def fit_visible_colors(svg, source, gradients=True):
     if definitions:
         defs=ET.Element('{'+NS+'}defs'); defs.extend(definitions); document.insert(0,defs)
     return ET.tostring(document,encoding='unicode')
+
+
+def visible_color_error(svg, source):
+    """Bounded sampling of the emitted fills, including stacked linear ramps.
+
+    This detects catastrophic color merging; it is not a perceptual quality
+    score and must not select between subtly different contour geometries.
+    """
+    document=ET.fromstring(svg)
+    paths=list(document.findall('{'+NS+'}path'))
+    width,height=source.size
+    scale=min(1,256/max(width,height))
+    sw,sh=max(1,round(width*scale)),max(1,round(height*scale))
+    sx,sy=sw/width,sh/height
+    labels=np.full((sh,sw),-1,dtype=np.int32)
+    for index,path in enumerate(paths):
+        polygons=[np.rint((polygon*np.array([sx,sy])-.5)*256).astype(np.int32) for polygon in contours(path.get('d',''))]
+        if polygons: cv2.fillPoly(labels,polygons,index,shift=8)
+    palette=np.full((len(paths)+1,3),255,dtype=float)
+    for index,path in enumerate(paths):
+        values=re.findall(r'[\d.]+',path.get('fill',''))
+        if path.get('fill','').startswith('rgb(') and len(values)==3:
+            palette[index+1]=np.array(values,dtype=float)
+    prediction=palette[labels+1]
+    definitions={element.get('id'):element for element in document.findall('.//{'+NS+'}linearGradient')}
+    for index,path in enumerate(paths):
+        fill=path.get('fill','')
+        if fill.startswith('url(#'):
+            y,x=np.nonzero(labels==index)
+            if not len(x): continue
+            gradient=definitions.get(fill[5:-1])
+            if gradient is None: continue
+            stops=list(gradient)
+            c0=np.array(re.findall(r'[\d.]+',stops[0].get('stop-color','')),dtype=float)
+            c1=np.array(re.findall(r'[\d.]+',stops[-1].get('stop-color','')),dtype=float)
+            start=np.array([float(gradient.get('x1')),float(gradient.get('y1'))])
+            vector=np.array([float(gradient.get('x2')),float(gradient.get('y2'))])-start
+            position=np.column_stack(((x+.5)/sx,(y+.5)/sy))
+            t=np.clip((position-start)@vector/max(float(vector@vector),1e-9),0,1)
+            prediction[y,x]=c0+(c1-c0)*t[:,None]
+    actual=np.asarray(source.convert('RGB').resize((sw,sh),Image.Resampling.NEAREST),dtype=float)
+    return float(np.abs(actual-prediction).mean())

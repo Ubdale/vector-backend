@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import vtracer
-from gradient_fit import fit_visible_colors,rectangle_gradient
+from gradient_fit import fit_visible_colors,rectangle_gradient,visible_color_error
 
 from engine import ENGINE
 
@@ -97,6 +97,19 @@ def trace(raw,width,height,settings):
     normalized=normalize_svg(svg,width,height)
     if illustration and settings.get('autoColors',True):
         normalized=fit_visible_colors(normalized,Image.frombytes('RGBA',(width,height),raw),settings.get('gradients',True))
+    # Smooth color fields can collapse to one native region even though the
+    # image contains rich color. Retry only catastrophic color loss, leaving
+    # ordinary artwork, fine line art and transparency on their existing route.
+    if illustration and settings.get('autoColors',True):
+        source=Image.frombytes('RGBA',(width,height),raw)
+        error=visible_color_error(normalized,source)
+        if error>16:
+            segmented=image.quantize(colors=128,method=Image.Quantize.MEDIANCUT,dither=Image.Dither.NONE).convert('RGB')
+            retry_buffer=io.BytesIO(); segmented.save(retry_buffer,format='PNG')
+            retry=vtracer.convert_raw_image_to_svg(retry_buffer.getvalue(),img_format='png',colormode='color',hierarchical='stacked',mode='spline',filter_speckle=speckle,color_precision=8,layer_difference=0,corner_threshold=round(90+20*(softness-.75)),length_threshold=3.5+.5*smoothing,max_iterations=10,splice_threshold=round(60+10*(softness-.75)),path_precision=3)
+            retry=fit_visible_colors(normalize_svg(retry,width,height),source,settings.get('gradients',True))
+            if visible_color_error(retry,source)<error*.75:
+                normalized=retry.replace('<svg ','<svg data-color-recovery="segmented-palette-v1" ',1)
     # Native speckle removal may remove a deliberate one-pixel highlight. Keep
     # only extreme outliers whose eight neighbors form a nearly flat field;
     # JPEG grain, textured photos and antialiased edges fail this flatness gate.

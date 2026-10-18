@@ -62,3 +62,11 @@ Additional tests cover Rust routing, compact cubic output, translation normaliza
 VTracer 0.6.15 is MIT licensed: https://github.com/visioncortex/vtracer/blob/0.6.15/LICENSE. Its required notice is retained in `THIRD-PARTY-NOTICES.txt`. This implementation uses classical tracing and curve fitting, not the separately licensed VT2 application or neural weights.
 
 The default CORS list includes https://vector-gamma-one.vercel.app. If ALLOWED_ORIGINS is set in Render, that value overrides the defaults and must include this exact origin.
+
+## Severe color-loss recovery
+
+Opaque automatic illustration tracing now checks emitted visible fills against a bounded source sample. If mean RGB error exceeds 16/255, it retries with a 128-color segmented palette and native splines. The retry is retained only when sampled error drops by at least 25%. Fixed palettes, transparent images and precision line art retain their existing routes. `/health` exposes `color_recovery: segmented-palette-v1`; recovered SVGs include `data-color-recovery`.
+
+On the synthetic textured-artwork regression, exported PDF pixel error decreased from 38.146 to 5.880/255 (84.6% less error, not 84.6% accuracy). Its colorful background previously collapsed to grey. The new result retains the colors but still has visible contour bands; it does not reconstruct arbitrary smooth gradients. The other 12 complex fixtures, including original/compressed/small dragon, photo, diagram, mandala, botanical and interwoven inputs, were byte-identical against the local baseline. Bounded quality sampling adds CPU work; recovery additionally traces a second candidate. 25 automated tests pass, including multicolor regression, gradient and occlusion checks.
+
+More detailed dragon configurations reduced pixel error but introduced grungier edges; they were rejected. No neural model was trained, and no direct paid-tool parity benchmark was established.
