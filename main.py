@@ -13,7 +13,7 @@ app.add_middleware(CORSMiddleware,allow_origins=origins,allow_methods=['GET','PO
 capacity=threading.BoundedSemaphore(1)
 
 @app.get('/health')
-def health(): return {'status':'ok','engine':ENGINE,'native_version':'0.6.15','gradient_mode':'source-fitted-linear-radial-v2','color_recovery':'segmented-palette-v1','execution':'isolated-process-v1','job_timeout_seconds':90,'upload_timeout_seconds':30,'fallback':'opencv-alpha-and-detail','refinement':'inkvec-0.2.6-gated-v1','refinement_available':_binary() is not None}
+def health(): return {'status':'ok','engine':ENGINE,'native_version':'0.6.15','gradient_mode':'source-fitted-linear-radial-v2','color_recovery':'segmented-palette-v1','execution':'isolated-process-v1','job_timeout_seconds':90,'upload_timeout_seconds':30,'fallback':'opencv-alpha-and-detail','refinement':'inkvec-0.2.6-gated-v1','refinement_available':_binary() is not None,'geometric_mode':'source-checked-flat-logo-v1'}
 
 async def read_payload(request, expected):
     raw=bytearray()

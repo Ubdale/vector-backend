@@ -80,3 +80,10 @@ Automatic default logo/illustration artwork between 256 and 768 pixels per side 
 The Python SVG adapter converts primitives/arcs/relative paths to editable absolute curves and preserves compound holes, gradient matrices, and multi-stop linear/radial fills. The matching frontend exporter is required before enabling the new backend. 57 backend tests pass. See the frontend repository ACCURACY-REFINEMENT-REPORT.md for actual local results and limitations; no paid-tool parity is claimed.
 
 Full-frame circular ramps now emit one true radial gradient only when every source pixel matches the rounded output within two channel levels. A one-pixel accent, alpha or a hard boundary rejects that shortcut. Regional linear/radial fitting remains conservative and source-supported.
+
+
+## Automatic flat-logo geometry
+
+Simple opaque logos at 32–768px now receive a separate source-checked geometry candidate when the precision trace has excessive paths. Dominant-ink coverage, local antialias mixtures, component complexity, rare colored patches and isolated accents gate entry. Candidate checks preserve per-ink components and holes, bound source error, and reject major displacement. Custom fit controls, manual palettes and transparency keep their precision route. Missing optional native binaries retain the baseline. `/health` exposes `geometric_mode: source-checked-flat-logo-v1`; accepted SVGs carry `data-engine="inkvec-geometric"`.
+
+The actual 400px Summit browser sample now traces to five editable paths instead of 1,048 antialias fragments. This recovers smooth underlying geometry; it does not upscale a bitmap or train a model. 69 backend regression tests pass, including tiny-mark and hole loss rejection.

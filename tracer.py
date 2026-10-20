@@ -74,11 +74,14 @@ def trace(raw,width,height,settings):
     line_art=flat_coverage>=.9
     native=min(width,height)>=8 and opaque and complex_image and not line_art and settings.get('edgeStyle')=='smooth' and not settings.get('corners') and settings.get('preset')!='sketch' and not settings.get('background')
     if not native:
+        original_settings=settings
         if line_art and complex_image:
             # Dense labels and connectors need their source boundaries more
             # than rounded corners; skip bilateral/island cleanup entirely.
             settings={**settings,'edgeStyle':'faithful','corners':True,'denoise':False}
-        return trace_opencv(raw,width,height,settings).replace('<svg ','<svg data-engine="opencv" ',1)
+        baseline=trace_opencv(raw,width,height,settings).replace('<svg ','<svg data-engine="opencv" ',1)
+        from geometric_refinement import refine_geometric
+        return refine_geometric(baseline,raw,width,height,original_settings)
     pixels=np.asarray(image)[:,:,:3].copy()
     if settings.get('denoise') or settings.get('preset')=='illustration':
         # Edge-preserving JPEG cleanup before region formation prevents the old
