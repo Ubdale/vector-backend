@@ -29,7 +29,8 @@ def refine_artwork(baseline,raw,width,height,settings,flat_coverage):
     # currently validated only for moderate-size opaque automatic illustrations.
     if os.getenv('INKVEC_REFINEMENT','1')!='1' or not settings.get('refine',True):return baseline
     if not (256<=min(width,height) and max(width,height)<=768 and .15<=flat_coverage<.9):return baseline
-    if baseline.count('<path')>750 or settings.get('preset')!='illustration' or not settings.get('autoColors',True) or not settings.get('gradients',True):return baseline
+    path_limit=5000 if settings.get('preset','logo')=='logo' else 750
+    if baseline.count('<path')>path_limit or settings.get('preset','logo') not in ('logo','illustration') or not settings.get('autoColors',True) or not settings.get('gradients',True):return baseline
     if float(settings.get('smooth',1))!=1 or float(settings.get('rounding',.75))!=.75 or float(settings.get('detail',0))!=0:return baseline
     try:
         from inkvec_runner import trace_inkvec
