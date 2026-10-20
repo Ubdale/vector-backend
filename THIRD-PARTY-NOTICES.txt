@@ -24,3 +24,10 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+
+Inkvec 0.2.6 — https://github.com/logolabs/inkvec
+Apache-2.0; upstream LICENSE, NOTICE and dependency disclosures are in licenses/inkvec/. The checksum-pinned plain CPU CLI is installed during build. No neural restorer or super-resolution weights are installed.
+
+svg.path 7.0 — https://github.com/regebro/svg.path
+MIT license; used for strict SVG arc/curve normalization. See licenses/svg-path-LICENSE.txt.

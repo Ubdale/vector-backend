@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import vtracer
-from gradient_fit import fit_visible_colors,rectangle_gradient,visible_color_error
+from gradient_fit import fit_visible_colors,rectangle_gradient,rectangle_radial_gradient,visible_color_error
 
 from engine import ENGINE
 
@@ -62,6 +62,8 @@ def trace(raw,width,height,settings):
     if opaque and settings.get('autoColors',True) and settings.get('edgeStyle')=='smooth' and settings.get('preset')!='sketch' and not settings.get('background') and settings.get('gradients',True):
         gradient=rectangle_gradient(image)
         if gradient is not None: return gradient
+        gradient=rectangle_radial_gradient(image)
+        if gradient is not None: return gradient
     complex_image=image.getcolors(maxcolors=256) is None
     # Flat diagrams may contain hundreds of antialias colors while almost all
     # pixels still belong to a few exact fills. Protect those diagrams too:
@@ -115,7 +117,8 @@ def trace(raw,width,height,settings):
     # JPEG grain, textured photos and antialiased edges fail this flatness gate.
     additions=protected_accents(raw,width,height)
     if additions: normalized=normalized.replace('</svg>',additions+'</svg>')
-    return normalized
+    from refinement import refine_artwork
+    return refine_artwork(normalized,raw,width,height,settings,flat_coverage)
 
 def number(v):
     return f'{v:.3f}'.rstrip('0').rstrip('.') or '0'

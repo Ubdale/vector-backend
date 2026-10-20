@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 from engine import ENGINE
+from inkvec_runner import _binary
 from trace_worker import run_trace_job, TraceTimeout, TraceFailed
 
 app=FastAPI(title='Outline Vector Backend')
@@ -12,7 +13,7 @@ app.add_middleware(CORSMiddleware,allow_origins=origins,allow_methods=['GET','PO
 capacity=threading.BoundedSemaphore(1)
 
 @app.get('/health')
-def health(): return {'status':'ok','engine':ENGINE,'native_version':'0.6.15','gradient_mode':'conservative-linear-v1','color_recovery':'segmented-palette-v1','execution':'isolated-process-v1','job_timeout_seconds':90,'upload_timeout_seconds':30,'fallback':'opencv-alpha-and-detail'}
+def health(): return {'status':'ok','engine':ENGINE,'native_version':'0.6.15','gradient_mode':'source-fitted-linear-radial-v2','color_recovery':'segmented-palette-v1','execution':'isolated-process-v1','job_timeout_seconds':90,'upload_timeout_seconds':30,'fallback':'opencv-alpha-and-detail','refinement':'inkvec-0.2.6-gated-v1','refinement_available':_binary() is not None}
 
 async def read_payload(request, expected):
     raw=bytearray()
@@ -31,7 +32,7 @@ async def vectorize(request:Request):
         if not isinstance(settings,dict) or not (0<width<=2000 and 0<height<=2000): raise ValueError()
         for key,values in [('preset',{'logo','illustration','sketch'}),('edgeStyle',{'smooth','faithful'})]:
             if key in settings and (not isinstance(settings[key],str) or settings[key] not in values): raise ValueError()
-        for key in ['autoColors','corners','denoise','background','edgeRecovery','gradients']:
+        for key in ['autoColors','corners','denoise','background','edgeRecovery','gradients','refine']:
             if key in settings and not isinstance(settings[key],bool): raise ValueError()
         for key,low,high in [('colors',2,64),('rounding',.2,2),('smooth',0,2),('detail',0,100),('threshold',0,255)]:
             if key in settings and (isinstance(settings[key],bool) or not math.isfinite(float(settings[key])) or not low<=float(settings[key])<=high): raise ValueError()

@@ -32,6 +32,17 @@ class TracerTests(unittest.TestCase):
         svg='<svg xmlns="http://www.w3.org/2000/svg"><path fill="rgb(255,0,0)" d="M 0 0 L 64 0 L 64 64 L 0 64 Z"/><path fill="rgb(0,0,255)" d="M 0 0 L 64 0 L 64 64 L 0 64 Z"/></svg>'
         self.assertEqual(visible_color_error(svg,source),0)
 
+    def test_true_circular_lighting_traces_as_one_radial_path(self):
+        y,x=np.mgrid[:160,:192]
+        distance=np.sqrt((x+.5-88)**2+(y+.5-77)**2)/135
+        rgb=30+(np.array([180,100,30])-30)*distance[:,:,None]
+        source=Image.fromarray(np.rint(rgb).astype(np.uint8)).convert('RGBA')
+        svg=trace(source.tobytes(),192,160,{'preset':'illustration','edgeStyle':'smooth','autoColors':True})
+        self.assertIn('data-engine="analytic-radial-gradient"',svg)
+        self.assertEqual(svg.count('<path'),1)
+        self.assertEqual(svg.count('<radialGradient'),1)
+        self.assertNotIn('<image',svg)
+
     def test_circle_is_fitted_curve(self):
         image=Image.new('RGBA',(128,128)); ImageDraw.Draw(image).ellipse((16,16,111,111),fill=(30,120,60,255))
         svg=trace(image.tobytes(),128,128,{'edgeStyle':'smooth'})
